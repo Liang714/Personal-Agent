@@ -1,4 +1,5 @@
 import functools
+import logging
 import sys
 from pathlib import Path
 
@@ -6,7 +7,10 @@ import click
 
 from agent import config
 from agent.errors import AgentError
+from agent.logging_config import setup_logging
 from agent.storage.db import init_db
+
+log = logging.getLogger(__name__)
 
 
 def handle_errors(fn):
@@ -15,9 +19,11 @@ def handle_errors(fn):
         try:
             fn(*args, **kwargs)
         except AgentError as exc:
+            log.warning("%s failed: %s", fn.__name__, exc)
             click.secho(f"Error: {exc}", fg="red", err=True)
             sys.exit(1)
         except Exception as exc:  # noqa: BLE001
+            log.exception("%s failed unexpectedly", fn.__name__)
             click.secho(f"Unexpected error: {exc}", fg="red", err=True)
             sys.exit(1)
 
@@ -28,6 +34,7 @@ def handle_errors(fn):
 def cli():
     try:
         config.ensure_dirs()
+        setup_logging()
         init_db()
     except OSError as exc:
         click.secho(f"Startup error: {exc}", fg="red", err=True)
@@ -112,11 +119,12 @@ def inbox():
 
 
 @inbox.command()
+@click.option("--dry-run", is_flag=True, help="Triage only — don't actually create any drafts.")
 @handle_errors
-def scan():
+def scan(dry_run: bool):
     from agent.capabilities.inbox import run_scan_and_draft
 
-    click.echo(run_scan_and_draft())
+    click.echo(run_scan_and_draft(dry_run=dry_run))
 
 
 @inbox.command()
@@ -126,6 +134,37 @@ def draft(message_id: str):
     from agent.core.agent_loop import ask
 
     click.echo(ask(f"Look up email {message_id} with get_message, then draft an appropriate reply with draft_reply."))
+
+
+@inbox.command()
+@click.option("--interval", default=None, type=int, help="Minutes between scans (default: config.INBOX_SCAN_INTERVAL_MINUTES).")
+def daemon(interval: int | None):
+    """Run inbox scan on a repeating schedule until interrupted (Ctrl+C)."""
+    from apscheduler.schedulers.blocking import BlockingScheduler
+
+    from agent.capabilities.inbox import run_scan_and_draft
+
+    setup_logging()
+    minutes = interval or config.INBOX_SCAN_INTERVAL_MINUTES
+
+    def _run_scan():
+        log.info("Running scheduled inbox scan")
+        try:
+            result = run_scan_and_draft()
+            log.info("Scheduled inbox scan complete:\n%s", result)
+        except AgentError as exc:
+            log.warning("Scheduled inbox scan failed: %s", exc)
+        except Exception:  # noqa: BLE001
+            log.exception("Scheduled inbox scan failed unexpectedly")
+
+    click.echo(f"Starting inbox scan daemon — every {minutes} minute(s). Ctrl+C to stop.")
+    scheduler = BlockingScheduler()
+    scheduler.add_job(_run_scan, "interval", minutes=minutes, next_run_time=None)
+    _run_scan()  # run once immediately, then on the schedule
+    try:
+        scheduler.start()
+    except (KeyboardInterrupt, SystemExit):
+        click.echo("Daemon stopped.")
 
 
 @cli.group()

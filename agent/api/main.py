@@ -8,12 +8,14 @@ from pydantic import BaseModel
 
 from agent import config
 from agent.errors import AgentError, NotAuthenticatedError, OllamaUnavailableError, ReauthRequiredError
+from agent.logging_config import setup_logging
 from agent.storage.db import init_db
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     config.ensure_dirs()
+    setup_logging()
     init_db()
     yield
 
@@ -66,10 +68,10 @@ async def memo(file: UploadFile = File(...)) -> dict:
 
 
 @app.get("/inbox/scan")
-def inbox_scan() -> dict:
+def inbox_scan(dry_run: bool = False) -> dict:
     from agent.capabilities.inbox import run_scan_and_draft
 
-    return {"result": run_scan_and_draft()}
+    return {"result": run_scan_and_draft(dry_run=dry_run)}
 
 
 @app.get("/calendar/today")

@@ -167,7 +167,7 @@ notifications), and give a one-sentence reason either way.
 {listing}"""
 
 
-def run_scan_and_draft() -> str:
+def run_scan_and_draft(dry_run: bool = False) -> str:
     """Triage the unread inbox and draft replies for anything that needs one.
 
     Deliberately does NOT delegate this whole multi-step decision to a single autonomous
@@ -176,6 +176,8 @@ def run_scan_and_draft() -> str:
     live testing). Instead, triage uses one bounded structured-output call (same reliable
     pattern as memos.py), and drafting is a separate, narrow ask() call per flagged email —
     the pattern that was confirmed to reliably invoke the tool.
+
+    dry_run=True skips the drafting step entirely, only returning the triage summary.
     """
     from agent.core.agent_loop import ask
     from agent.llm_client import client
@@ -200,6 +202,11 @@ def run_scan_and_draft() -> str:
         lines.append(f"  [{item.message_id}] {flag} — {item.reason}")
 
     to_draft = [item for item in triage.items if item.needs_reply]
+    if dry_run:
+        if to_draft:
+            lines.append(f"\nDry run: would draft replies for {len(to_draft)} email(s), none created.")
+        return "\n".join(lines)
+
     if to_draft:
         lines.append("\nDrafting replies:")
         for item in to_draft:

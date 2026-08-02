@@ -1,6 +1,6 @@
 # personal-agent
 
-A personal multimodal AI agent: inbox/calendar management, a general companion, and a voice-memo-to-task/journal converter. Backend-only for now (CLI first, minimal API in Week 3+) — no phone/web UI yet.
+A personal multimodal AI agent: inbox/calendar management, a general companion, and a voice-memo-to-task/journal converter. Backend + CLI + a minimal API — no phone/web UI yet.
 
 Runs entirely locally and for free — no paid API keys required. LLM reasoning is via [Ollama](https://ollama.com) running `qwen2.5:7b-instruct`; speech-to-text is via local `faster-whisper`.
 
@@ -16,19 +16,33 @@ Runs entirely locally and for free — no paid API keys required. LLM reasoning 
 2. Set up the Python environment:
    ```bash
    conda activate personal-agent
-   pip install -e .
-   cp .env.example .env   # defaults work out of the box, no keys needed
+   pip install -e .          # add ".[dev]" instead to also get pytest
+   cp .env.example .env      # defaults work out of the box, no keys needed
    ```
+3. For Gmail/Calendar: run `python -m agent.cli auth setup` once (opens a browser for Google consent). See the plan file for the one-time Google Cloud Console setup this depends on.
 
 ## Usage
 
 ```bash
-python -m agent.cli chat "what's on my plate today?"
+python -m agent.cli chat "what's on my plate today?"     # one-shot
+python -m agent.cli chat                                  # interactive REPL, remembers context via SQLite
 python -m agent.cli memo path/to/file.m4a
+python -m agent.cli inbox scan                             # triage + draft replies (never auto-sends)
+python -m agent.cli inbox scan --dry-run                   # triage only, no drafts created
+python -m agent.cli inbox daemon --interval 30              # repeat inbox scan every N minutes until Ctrl+C
+python -m agent.cli calendar today
+python -m agent.cli serve                                   # minimal HTTP API on :8000 (/chat, /memo, /inbox/scan, /calendar/today)
 ```
 
 Drop audio files into `data/memos/` (or point `MEMOS_WATCH_DIR` at a folder synced from your phone) and run `memo` against them.
 
-Note: until Week 2/3 (inbox, calendar, companion) are built, `chat` has no real tools to call and will answer from the model's general knowledge only — it doesn't yet know anything about your actual email, calendar, or tasks.
+Logs go to `data/agent.log` as well as stdout.
+
+## Tests
+
+```bash
+pip install -e ".[dev]"
+python -m pytest tests/
+```
 
 See `/Users/liang/.claude/plans/i-am-going-to-cheeky-ember.md` for the full build plan.

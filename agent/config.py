@@ -24,6 +24,7 @@ OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:7b-instruct")
 WHISPER_MODEL_SIZE = os.environ.get("WHISPER_MODEL_SIZE", "small")
 AGENT_MAX_TOOL_ITERATIONS = int(os.environ.get("AGENT_MAX_TOOL_ITERATIONS", "20"))
+INBOX_SCAN_INTERVAL_MINUTES = int(os.environ.get("INBOX_SCAN_INTERVAL_MINUTES", "30"))
 
 LOCAL_TZ = ZoneInfo(os.environ.get("LOCAL_TZ", "Asia/Tokyo"))
 

@@ -15,9 +15,11 @@ dependencies = [
     "fastapi>=0.115.0",
     "uvicorn>=0.32.0",
     "python-multipart>=0.0.9",
-    # Week 4 (scheduler) — not yet used
     "apscheduler>=3.10.4",
 ]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
 
 [build-system]
 requires = ["setuptools>=68"]
