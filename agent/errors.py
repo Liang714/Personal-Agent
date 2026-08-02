@@ -20,3 +20,7 @@ class MemoExtractionError(AgentError):
 
 class TranscriptionError(AgentError):
     pass
+
+
+class MatchExtractionError(AgentError):
+    pass

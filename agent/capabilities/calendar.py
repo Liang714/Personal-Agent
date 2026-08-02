@@ -3,10 +3,13 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from googleapiclient.discovery import build
+from pydantic import BaseModel, ValidationError
 
 from agent import config
 from agent.core.tools import register_tool
+from agent.errors import MatchExtractionError
 from agent.google_auth import get_credentials
+from agent.llm_client import client
 
 
 @dataclass
@@ -77,13 +80,16 @@ def _get_provider() -> CalendarProvider:
     return _provider
 
 
+def _today_range() -> tuple[datetime, datetime]:
+    now_local = datetime.now(config.LOCAL_TZ)
+    start_of_day = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    return start_of_day, start_of_day + timedelta(days=1)
+
+
 @register_tool
 def list_today_events() -> str:
     """List today's calendar events with start/end times."""
-    now_local = datetime.now(config.LOCAL_TZ)
-    start_of_day = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
-    end_of_day = start_of_day + timedelta(days=1)
-    events = _get_provider().list_events(start_of_day, end_of_day)
+    events = _get_provider().list_events(*_today_range())
     if not events:
         return "No events today."
     return "\n".join(f"[{e.id}] {e.start} - {e.end}: {e.summary}" for e in events)
@@ -101,9 +107,74 @@ def create_calendar_event(summary: str, date: str, start_time: str, end_time: st
     return f"Event created (id={event_id})."
 
 
-@register_tool
 def delete_calendar_event(event_id: str) -> str:
-    """Cancel/remove a calendar event by id. Use list_today_events first to find the event's id
-    — only today's events can currently be found this way."""
+    """Cancel/remove a calendar event by id."""
     _get_provider().delete_event(event_id)
     return f"Event {event_id} deleted."
+
+
+class _MatchedEventIds(BaseModel):
+    event_ids: list[str]
+    explanation: str
+
+
+_EVENT_MATCH_PROMPT = """Here is today's real list of calendar events (id, start, end, summary). \
+A user asked to delete event(s) matching this description: "{description}"
+
+Today's events:
+{listing}
+
+Return the id(s) of the event(s) that match the description. If it clearly refers to one event, \
+return just that one id. If it refers to multiple events (e.g. "both", "all of them"), return \
+all matching ids. If you are not confident any event matches, return an empty list — never guess \
+or invent an id that isn't in the list above."""
+
+
+def _match_event_ids(description: str, events: list[CalendarEvent]) -> list[str]:
+    listing = "\n".join(f"[{e.id}] {e.start} - {e.end}: {e.summary}" for e in events)
+    response = client.chat(
+        model=config.OLLAMA_MODEL,
+        messages=[
+            {"role": "user", "content": _EVENT_MATCH_PROMPT.format(description=description, listing=listing)}
+        ],
+        format=_MatchedEventIds.model_json_schema(),
+    )
+    content = response.message.content
+    if not content:
+        raise MatchExtractionError("The model returned no content while matching the event description.")
+    try:
+        matched = _MatchedEventIds.model_validate_json(content)
+    except ValidationError as exc:
+        raise MatchExtractionError(f"Couldn't parse the model's match output: {exc}") from exc
+
+    real_ids = {e.id for e in events}
+    cleaned = [eid.strip("[] ") for eid in matched.event_ids]
+    return [eid for eid in cleaned if eid in real_ids]
+
+
+@register_tool
+def delete_calendar_events(description: str) -> str:
+    """Delete one or more of today's calendar events matching a natural-language description
+    (e.g. "the dentist appointment", "both meetings this afternoon", "the 3pm one"). Do not
+    invent or guess an event id yourself — pass the user's own description and this tool will
+    look up today's real events and match against them itself. Only today's events can currently
+    be found/deleted this way. If nothing matches confidently, nothing is deleted."""
+    events = _get_provider().list_events(*_today_range())
+    if not events:
+        return "No events today to delete."
+
+    matched_ids = _match_event_ids(description, events)
+    if not matched_ids:
+        listing = "\n".join(f"[{e.id}] {e.start} - {e.end}: {e.summary}" for e in events)
+        return (
+            f'Couldn\'t confidently match "{description}" to any of today\'s events — nothing '
+            f"was deleted. Today's events:\n{listing}"
+        )
+
+    deleted = [e for e in events if e.id in matched_ids]
+    for e in deleted:
+        delete_calendar_event(e.id)
+
+    lines = [f"Deleted {len(deleted)} event(s):"]
+    lines += [f"  - {e.summary} ({e.start} - {e.end})" for e in deleted]
+    return "\n".join(lines)
