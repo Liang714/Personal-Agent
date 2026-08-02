@@ -1,6 +1,6 @@
 # personal-agent
 
-A personal multimodal AI agent: inbox/calendar management, a general companion, and a voice-memo-to-task/journal converter. Backend + CLI + a minimal API — no phone/web UI yet.
+A personal multimodal AI agent: inbox/calendar management, a general companion, and a voice-memo-to-task/journal converter. Backend + CLI + API + a web UI (see [web/](web/) — works on phone browsers too, no native app needed).
 
 Runs entirely locally and for free — no paid API keys required. LLM reasoning is via [Ollama](https://ollama.com) running `qwen2.5:7b-instruct`; speech-to-text is via local `faster-whisper`.
 
@@ -44,5 +44,9 @@ Logs go to `data/agent.log` as well as stdout.
 pip install -e ".[dev]"
 python -m pytest tests/
 ```
+
+## Web UI
+
+See [web/README.md](web/README.md). In short: start `python -m agent.cli serve`, then `cd web && npm run dev`.
 
 See `/Users/liang/.claude/plans/i-am-going-to-cheeky-ember.md` for the full build plan.

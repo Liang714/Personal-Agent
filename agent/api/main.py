@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, File, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -21,6 +22,15 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="personal-agent", lifespan=lifespan)
+
+# Local-only personal app (API binds to 127.0.0.1), so a permissive localhost
+# CORS policy for the web frontend's dev/preview servers is not a real exposure.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.exception_handler(AgentError)
