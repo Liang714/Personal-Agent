@@ -138,6 +138,93 @@ button.primary {
   font-style: italic;
 }
 
+/* Calendar panel: event form + list */
+
+.event-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+.event-form input[type="text"] {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: var(--bg);
+  color: var(--text-h);
+  font-size: 14px;
+}
+
+.event-form-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.event-form-row input {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: var(--bg);
+  color: var(--text-h);
+  font-size: 14px;
+}
+
+.event-form-sep {
+  font-size: 13px;
+  color: var(--text);
+  opacity: 0.7;
+}
+
+.event-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.event-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+
+.event-list-time {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--accent);
+  margin-right: 10px;
+}
+
+.event-list-summary {
+  font-size: 14px;
+  color: var(--text-h);
+}
+
+.event-list-delete {
+  background: none;
+  border: 1px solid var(--error);
+  color: var(--error);
+  font-size: 13px;
+  padding: 5px 10px;
+}
+
+.event-list-delete:hover:not(:disabled) {
+  background: var(--error-bg);
+}
+
 .memo-result h3 {
   font-size: 14px;
   margin-top: 16px;

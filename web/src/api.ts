@@ -40,6 +40,37 @@ export function calendarToday(): Promise<{ result: string }> {
   return request("/calendar/today");
 }
 
+export interface CalendarEvent {
+  id: string;
+  summary: string;
+  start: string;
+  end: string;
+}
+
+export function listCalendarEvents(): Promise<CalendarEvent[]> {
+  return request("/calendar/events");
+}
+
+export interface CreateEventInput {
+  summary: string;
+  date: string;
+  start_time: string;
+  end_time: string;
+  description?: string;
+}
+
+export function createCalendarEvent(input: CreateEventInput): Promise<{ result: string }> {
+  return request("/calendar/events", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteCalendarEvent(eventId: string): Promise<{ result: string }> {
+  return request(`/calendar/events/${encodeURIComponent(eventId)}`, { method: "DELETE" });
+}
+
 export interface MemoResult {
   transcript: string;
   tasks: string[];

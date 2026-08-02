@@ -90,3 +90,45 @@ def calendar_today() -> dict:
 
     result = ask("What's on my calendar today? Use list_today_events. Flag any conflicts or back-to-back meetings.")
     return {"result": result}
+
+
+class CalendarEventOut(BaseModel):
+    id: str
+    summary: str
+    start: str
+    end: str
+
+
+@app.get("/calendar/events", response_model=list[CalendarEventOut])
+def list_calendar_events() -> list[CalendarEventOut]:
+    """Today's real events, straight from Google Calendar — no LLM involved."""
+    from agent.capabilities.calendar import _get_provider, _today_range
+
+    events = _get_provider().list_events(*_today_range())
+    return [CalendarEventOut(id=e.id, summary=e.summary, start=e.start, end=e.end) for e in events]
+
+
+class CreateEventRequest(BaseModel):
+    summary: str
+    date: str
+    start_time: str
+    end_time: str
+    description: str = ""
+
+
+@app.post("/calendar/events")
+def create_calendar_event_endpoint(req: CreateEventRequest) -> dict:
+    """Create an event directly — no LLM involved, so it can't fail to be called."""
+    from agent.capabilities.calendar import create_calendar_event
+
+    result = create_calendar_event(req.summary, req.date, req.start_time, req.end_time, req.description)
+    return {"result": result}
+
+
+@app.delete("/calendar/events/{event_id}")
+def delete_calendar_event_endpoint(event_id: str) -> dict:
+    """Delete an event by its real id directly — no LLM involved, so it can't fail to be called."""
+    from agent.capabilities.calendar import delete_calendar_event
+
+    result = delete_calendar_event(event_id)
+    return {"result": result}
