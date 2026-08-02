@@ -12,9 +12,9 @@ dependencies = [
     "google-auth-oauthlib>=1.2.1",
     "click>=8.1.7",
     "pydantic>=2.9",
-    # Week 3 (API server) — not yet used
     "fastapi>=0.115.0",
     "uvicorn>=0.32.0",
+    "python-multipart>=0.0.9",
     # Week 4 (scheduler) — not yet used
     "apscheduler>=3.10.4",
 ]

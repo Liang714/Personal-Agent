@@ -35,12 +35,38 @@ def cli():
 
 
 @cli.command()
-@click.argument("message")
+@click.argument("message", required=False)
 @handle_errors
-def chat(message: str):
+def chat(message: str | None):
+    from agent.capabilities.companion import load_recent_history, save_turn
     from agent.core.agent_loop import ask
 
-    click.echo(ask(message))
+    if message:
+        history = load_recent_history()
+        response = ask(message, history=history)
+        save_turn("user", message)
+        save_turn("assistant", response)
+        click.echo(response)
+        return
+
+    click.echo("Chat session started. Type 'exit' or Ctrl+D to quit.")
+    history = load_recent_history()
+    while True:
+        try:
+            user_input = click.prompt("You", prompt_suffix="> ")
+        except (click.exceptions.Abort, EOFError):
+            click.echo("\nBye.")
+            break
+        if user_input.strip().lower() in ("exit", "quit"):
+            click.echo("Bye.")
+            break
+
+        response = ask(user_input, history=history)
+        click.echo(f"Agent> {response}")
+        save_turn("user", user_input)
+        save_turn("assistant", response)
+        history.append({"role": "user", "content": user_input})
+        history.append({"role": "assistant", "content": response})
 
 
 @cli.command()
@@ -113,6 +139,15 @@ def today():
     from agent.core.agent_loop import ask
 
     click.echo(ask("What's on my calendar today? Use list_today_events. Flag any conflicts or back-to-back meetings."))
+
+
+@cli.command()
+@click.option("--host", default="127.0.0.1", show_default=True)
+@click.option("--port", default=8000, show_default=True, type=int)
+def serve(host: str, port: int):
+    import uvicorn
+
+    uvicorn.run("agent.api.main:app", host=host, port=port)
 
 
 if __name__ == "__main__":

@@ -72,3 +72,20 @@ def add_journal_index(entry_date: str, file_path: str, source: str) -> int:
 def list_open_tasks() -> list[sqlite3.Row]:
     with get_conn() as conn:
         return conn.execute("SELECT * FROM tasks WHERE done = 0 ORDER BY created_at DESC").fetchall()
+
+
+def add_conversation_turn(role: str, content: str) -> int:
+    with get_conn() as conn:
+        cur = conn.execute(
+            "INSERT INTO conversations (role, content, created_at) VALUES (?, ?, ?)",
+            (role, content, datetime.now(timezone.utc).isoformat()),
+        )
+        return cur.lastrowid
+
+
+def get_recent_conversation(limit: int = 10) -> list[sqlite3.Row]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM conversations ORDER BY id DESC LIMIT ?", (limit,)
+        ).fetchall()
+        return list(reversed(rows))
