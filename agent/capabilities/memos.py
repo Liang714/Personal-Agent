@@ -1,9 +1,10 @@
 from datetime import date
 from pathlib import Path
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from agent import config
+from agent.errors import MemoExtractionError
 from agent.llm_client import client
 from agent.storage import db, files
 from agent.stt.transcribe import transcribe
@@ -30,7 +31,13 @@ def process_memo(transcript: str) -> MemoExtraction:
         messages=[{"role": "user", "content": MEMO_PROMPT.format(transcript=transcript)}],
         format=MemoExtraction.model_json_schema(),
     )
-    return MemoExtraction.model_validate_json(response.message.content)
+    content = response.message.content
+    if not content:
+        raise MemoExtractionError("The model returned no content while processing this memo.")
+    try:
+        return MemoExtraction.model_validate_json(content)
+    except ValidationError as exc:
+        raise MemoExtractionError(f"Couldn't parse the model's output for this memo: {exc}") from exc
 
 
 def handle_memo_file(audio_path: Path) -> dict:

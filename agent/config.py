@@ -1,4 +1,5 @@
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 import os
@@ -22,7 +23,11 @@ GOOGLE_TOKEN_PATH = Path(
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:7b-instruct")
 WHISPER_MODEL_SIZE = os.environ.get("WHISPER_MODEL_SIZE", "small")
+AGENT_MAX_TOOL_ITERATIONS = int(os.environ.get("AGENT_MAX_TOOL_ITERATIONS", "20"))
 
-DATA_DIR.mkdir(parents=True, exist_ok=True)
-MEMOS_WATCH_DIR.mkdir(parents=True, exist_ok=True)
-JOURNAL_DIR.mkdir(parents=True, exist_ok=True)
+LOCAL_TZ = ZoneInfo(os.environ.get("LOCAL_TZ", "Asia/Tokyo"))
+
+
+def ensure_dirs() -> None:
+    for path in (DATA_DIR, MEMOS_WATCH_DIR, JOURNAL_DIR, GOOGLE_CREDENTIALS_PATH.parent, GOOGLE_TOKEN_PATH.parent):
+        path.mkdir(parents=True, exist_ok=True)

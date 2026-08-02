@@ -3,6 +3,7 @@ from pathlib import Path
 from faster_whisper import WhisperModel
 
 from agent import config
+from agent.errors import TranscriptionError
 
 _model: WhisperModel | None = None
 
@@ -15,5 +16,8 @@ def _get_model() -> WhisperModel:
 
 
 def transcribe(audio_path: Path) -> str:
-    segments, _info = _get_model().transcribe(str(audio_path))
-    return " ".join(segment.text.strip() for segment in segments).strip()
+    try:
+        segments, _info = _get_model().transcribe(str(audio_path))
+        return " ".join(segment.text.strip() for segment in segments).strip()
+    except Exception as exc:  # noqa: BLE001
+        raise TranscriptionError(f"Couldn't transcribe {audio_path.name}: {exc}") from exc
