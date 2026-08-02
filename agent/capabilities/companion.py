@@ -22,6 +22,20 @@ def list_recent_tasks() -> str:
 
 
 @register_tool
+def complete_task(task_id: int) -> str:
+    """Mark a task as done by id. Use list_recent_tasks first to find the task's id."""
+    db.mark_task_done(task_id)
+    return f"Task {task_id} marked done."
+
+
+@register_tool
+def delete_task(task_id: int) -> str:
+    """Delete a task by id. Use list_recent_tasks first to find the task's id."""
+    db.delete_task(task_id)
+    return f"Task {task_id} deleted."
+
+
+@register_tool
 def search_journal(keyword: str) -> str:
     """Search past journal entries for a keyword and return matching entries."""
     matches = []

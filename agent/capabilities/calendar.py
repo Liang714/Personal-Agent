@@ -24,6 +24,9 @@ class CalendarProvider(ABC):
     @abstractmethod
     def create_event(self, summary: str, start: datetime, end: datetime, description: str = "") -> str: ...
 
+    @abstractmethod
+    def delete_event(self, event_id: str) -> None: ...
+
 
 class GoogleCalendarProvider(CalendarProvider):
     def __init__(self):
@@ -57,6 +60,9 @@ class GoogleCalendarProvider(CalendarProvider):
         }
         created = self._service.events().insert(calendarId="primary", body=event).execute()
         return created["id"]
+
+    def delete_event(self, event_id: str) -> None:
+        self._service.events().delete(calendarId="primary", eventId=event_id).execute()
 
 
 # TODO(week3): module-level singleton isn't thread-safe once served via FastAPI — revisit
@@ -93,3 +99,11 @@ def create_calendar_event(summary: str, date: str, start_time: str, end_time: st
     end = datetime.fromisoformat(f"{date}T{end_time}").replace(tzinfo=config.LOCAL_TZ)
     event_id = _get_provider().create_event(summary, start, end, description)
     return f"Event created (id={event_id})."
+
+
+@register_tool
+def delete_calendar_event(event_id: str) -> str:
+    """Cancel/remove a calendar event by id. Use list_today_events first to find the event's id
+    — only today's events can currently be found this way."""
+    _get_provider().delete_event(event_id)
+    return f"Event {event_id} deleted."

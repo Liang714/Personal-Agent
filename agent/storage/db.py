@@ -74,6 +74,16 @@ def list_open_tasks() -> list[sqlite3.Row]:
         return conn.execute("SELECT * FROM tasks WHERE done = 0 ORDER BY created_at DESC").fetchall()
 
 
+def mark_task_done(task_id: int) -> None:
+    with get_conn() as conn:
+        conn.execute("UPDATE tasks SET done = 1 WHERE id = ?", (task_id,))
+
+
+def delete_task(task_id: int) -> None:
+    with get_conn() as conn:
+        conn.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+
+
 def add_conversation_turn(role: str, content: str) -> int:
     with get_conn() as conn:
         cur = conn.execute(
