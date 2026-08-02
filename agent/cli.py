@@ -88,17 +88,9 @@ def inbox():
 @inbox.command()
 @handle_errors
 def scan():
-    from agent.core.agent_loop import ask
+    from agent.capabilities.inbox import run_scan_and_draft
 
-    click.echo(
-        ask(
-            "Scan my unread inbox using scan_inbox. For each email, decide if it needs attention "
-            "and say why. For any email that clearly needs a reply, look up its full content with "
-            "get_message and draft a reply with draft_reply — do not ask for permission first, "
-            "drafts are always safe since they are never sent automatically. Summarize what you "
-            "found and what you drafted."
-        )
-    )
+    click.echo(run_scan_and_draft())
 
 
 @inbox.command()

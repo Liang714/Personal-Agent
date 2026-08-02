@@ -84,14 +84,12 @@ def list_today_events() -> str:
 
 
 @register_tool
-def create_calendar_event(summary: str, start_iso: str, end_iso: str, description: str = "") -> str:
-    """Create a calendar event. start_iso and end_iso are ISO 8601 datetimes; include a UTC
-    offset if known, otherwise the user's local timezone is assumed."""
-    start = datetime.fromisoformat(start_iso)
-    end = datetime.fromisoformat(end_iso)
-    if start.tzinfo is None:
-        start = start.replace(tzinfo=config.LOCAL_TZ)
-    if end.tzinfo is None:
-        end = end.replace(tzinfo=config.LOCAL_TZ)
+def create_calendar_event(summary: str, date: str, start_time: str, end_time: str, description: str = "") -> str:
+    """Create a calendar event. date is 'YYYY-MM-DD', start_time and end_time are 'HH:MM' in
+    24-hour format — all plain wall-clock values in the user's own local timezone. Do not
+    include any UTC offset, timezone letter, or timezone conversion; local time is always
+    assumed automatically."""
+    start = datetime.fromisoformat(f"{date}T{start_time}").replace(tzinfo=config.LOCAL_TZ)
+    end = datetime.fromisoformat(f"{date}T{end_time}").replace(tzinfo=config.LOCAL_TZ)
     event_id = _get_provider().create_event(summary, start, end, description)
     return f"Event created (id={event_id})."

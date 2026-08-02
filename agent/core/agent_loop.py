@@ -1,6 +1,6 @@
 from agent import config
 from agent.errors import OllamaUnavailableError
-from agent.llm_client import client, SYSTEM_PROMPT
+from agent.llm_client import client, build_system_prompt
 from agent.core.tools import TOOLS, TOOLS_BY_NAME
 
 # Import capability modules so their @register_tool functions populate TOOLS.
@@ -23,7 +23,7 @@ def _call_model(messages: list, tools: list = TOOLS) -> object:
 
 def ask(user_message: str, history: list[dict] | None = None) -> str:
     messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": build_system_prompt()},
         *(history or []),
         {"role": "user", "content": user_message},
     ]

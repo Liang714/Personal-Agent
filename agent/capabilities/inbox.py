@@ -6,7 +6,9 @@ from email.mime.text import MIMEText
 from html import unescape
 
 from googleapiclient.discovery import build
+from pydantic import BaseModel
 
+from agent import config
 from agent.core.tools import register_tool
 from agent.google_auth import get_credentials
 
@@ -99,8 +101,8 @@ class GmailProvider(EmailProvider):
 
     def create_draft_reply(self, thread_id: str, to: str, subject: str, body: str) -> str:
         msg = MIMEText(body)
-        msg["to"] = to
-        msg["subject"] = subject if subject.lower().startswith("re:") else f"Re: {subject}"
+        msg["To"] = to
+        msg["Subject"] = subject if subject.lower().startswith("re:") else f"Re: {subject}"
         raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
         draft = (
             self._service.users()
@@ -146,3 +148,67 @@ def draft_reply(message_id: str, body: str) -> str:
     m = _get_provider().get_message(message_id)
     draft_id = _get_provider().create_draft_reply(m.thread_id, m.sender, m.subject, body)
     return f"Draft created (id={draft_id}) in Gmail Drafts. Not sent — waiting for user review."
+
+
+class _TriageItem(BaseModel):
+    message_id: str
+    needs_reply: bool
+    reason: str
+
+
+class _TriageResult(BaseModel):
+    items: list[_TriageItem]
+
+
+_TRIAGE_PROMPT = """Here is a list of unread emails (id, sender, subject, snippet). For each \
+one, decide whether it clearly needs a reply from the user (not just informational/automated \
+notifications), and give a one-sentence reason either way.
+
+{listing}"""
+
+
+def run_scan_and_draft() -> str:
+    """Triage the unread inbox and draft replies for anything that needs one.
+
+    Deliberately does NOT delegate this whole multi-step decision to a single autonomous
+    tool-calling loop: a local 7B model reliably narrates "I drafted a reply" without actually
+    calling draft_reply when asked to plan-and-execute across many emails at once (verified via
+    live testing). Instead, triage uses one bounded structured-output call (same reliable
+    pattern as memos.py), and drafting is a separate, narrow ask() call per flagged email —
+    the pattern that was confirmed to reliably invoke the tool.
+    """
+    from agent.core.agent_loop import ask
+    from agent.llm_client import client
+
+    unread = _get_provider().list_unread()
+    if not unread:
+        return "No unread emails."
+
+    listing = "\n".join(f"[{m.id}] from {m.sender}: {m.subject} — {m.snippet}" for m in unread)
+    response = client.chat(
+        model=config.OLLAMA_MODEL,
+        messages=[{"role": "user", "content": _TRIAGE_PROMPT.format(listing=listing)}],
+        format=_TriageResult.model_json_schema(),
+    )
+    triage = _TriageResult.model_validate_json(response.message.content)
+    for item in triage.items:
+        item.message_id = item.message_id.strip("[] ")
+
+    lines = ["Triage:"]
+    for item in triage.items:
+        flag = "needs reply" if item.needs_reply else "no reply needed"
+        lines.append(f"  [{item.message_id}] {flag} — {item.reason}")
+
+    to_draft = [item for item in triage.items if item.needs_reply]
+    if to_draft:
+        lines.append("\nDrafting replies:")
+        for item in to_draft:
+            result = ask(
+                f"Look up email {item.message_id} with get_message, then draft an appropriate "
+                "reply with draft_reply."
+            )
+            lines.append(f"  [{item.message_id}] {result}")
+    else:
+        lines.append("\nNo emails needed a reply.")
+
+    return "\n".join(lines)
