@@ -138,7 +138,22 @@ button.primary {
   font-style: italic;
 }
 
-/* Calendar panel: event form + list */
+/* Calendar panel: date nav + event form + list */
+
+.date-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.date-nav input[type="date"] {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: var(--bg-alt);
+  color: var(--text-h);
+  font-size: 14px;
+}
 
 .event-form {
   display: flex;

@@ -21,7 +21,14 @@ GOOGLE_TOKEN_PATH = Path(
 )
 
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434")
-OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:7b-instruct")
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:14b-instruct")
+
+# Claude (Anthropic API) powers the main chat/tool-calling loop specifically — the strongest
+# tool-calling reliability available, worth the small real cost. Ollama stays local/free for the
+# narrower structured-output helpers (memo/inbox triage, calendar/task match) which already work
+# well there.
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
 WHISPER_MODEL_SIZE = os.environ.get("WHISPER_MODEL_SIZE", "small")
 AGENT_MAX_TOOL_ITERATIONS = int(os.environ.get("AGENT_MAX_TOOL_ITERATIONS", "20"))
 INBOX_SCAN_INTERVAL_MINUTES = int(os.environ.get("INBOX_SCAN_INTERVAL_MINUTES", "30"))

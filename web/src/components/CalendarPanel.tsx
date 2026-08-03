@@ -7,12 +7,28 @@ import {
   type CalendarEvent,
 } from "../api";
 
-function todayDateInput(): string {
-  const d = new Date();
+function dateInputValue(d: Date): string {
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
+}
+
+function todayDateInput(): string {
+  return dateInputValue(new Date());
+}
+
+function shiftDate(dateStr: string, days: number): string {
+  const d = new Date(`${dateStr}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return dateInputValue(d);
+}
+
+function formatDateLabel(dateStr: string): string {
+  const d = new Date(`${dateStr}T00:00:00`);
+  const isToday = dateStr === todayDateInput();
+  const label = d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+  return isToday ? `Today — ${label}` : label;
 }
 
 function formatEventTime(iso: string): string {
@@ -21,6 +37,7 @@ function formatEventTime(iso: string): string {
 }
 
 export default function CalendarPanel() {
+  const [viewDate, setViewDate] = useState(todayDateInput());
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,7 +55,7 @@ export default function CalendarPanel() {
     setLoading(true);
     setError(null);
     try {
-      const items = await listCalendarEvents();
+      const items = await listCalendarEvents(viewDate);
       items.sort((a, b) => a.start.localeCompare(b.start));
       setEvents(items);
     } catch (err) {
@@ -50,7 +67,12 @@ export default function CalendarPanel() {
 
   useEffect(() => {
     refresh();
-  }, []);
+  }, [viewDate]);
+
+  function openAddForm() {
+    setDate(viewDate);
+    setShowForm(true);
+  }
 
   async function onDelete(eventId: string) {
     setDeletingId(eventId);
@@ -88,12 +110,12 @@ export default function CalendarPanel() {
   return (
     <div className="panel">
       <div className="panel-header">
-        <h2>Calendar — today</h2>
+        <h2>Calendar — {formatDateLabel(viewDate)}</h2>
         <div className="panel-actions">
           <button onClick={refresh} disabled={loading}>
             Refresh
           </button>
-          <button onClick={() => setShowForm((s) => !s)} className="primary">
+          <button onClick={() => (showForm ? setShowForm(false) : openAddForm())} className="primary">
             {showForm ? "Cancel" : "Add event"}
           </button>
         </div>
@@ -102,6 +124,17 @@ export default function CalendarPanel() {
         Reads and writes your calendar directly — no AI involved in adding or removing events, so
         it always works.
       </p>
+
+      <div className="date-nav">
+        <button onClick={() => setViewDate((d) => shiftDate(d, -1))} aria-label="Previous day">
+          ◀
+        </button>
+        <input type="date" value={viewDate} onChange={(e) => setViewDate(e.target.value)} />
+        <button onClick={() => setViewDate((d) => shiftDate(d, 1))} aria-label="Next day">
+          ▶
+        </button>
+        {viewDate !== todayDateInput() && <button onClick={() => setViewDate(todayDateInput())}>Today</button>}
+      </div>
 
       {showForm && (
         <form onSubmit={onCreate} className="event-form">
@@ -125,10 +158,10 @@ export default function CalendarPanel() {
         </form>
       )}
 
-      {loading && <p className="loading">Loading today's events…</p>}
+      {loading && <p className="loading">Loading events…</p>}
       {error && <p className="error-text">{error}</p>}
 
-      {!loading && events.length === 0 && <p className="empty-hint">No events today.</p>}
+      {!loading && events.length === 0 && <p className="empty-hint">No events on this day.</p>}
 
       {events.length > 0 && (
         <ul className="event-list">

@@ -74,6 +74,7 @@ def chat(message: str | None):
         save_turn("assistant", response)
         history.append({"role": "user", "content": user_input})
         history.append({"role": "assistant", "content": response})
+        history = history[-10:]  # keep bounded, same window as load_recent_history()'s default
 
 
 @cli.command()
@@ -177,7 +178,7 @@ def calendar():
 def today():
     from agent.core.agent_loop import ask
 
-    click.echo(ask("What's on my calendar today? Use list_today_events. Flag any conflicts or back-to-back meetings."))
+    click.echo(ask("What's on my calendar today? Use list_events_on_date. Flag any conflicts or back-to-back meetings."))
 
 
 @cli.command()

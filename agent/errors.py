@@ -2,7 +2,7 @@ class AgentError(Exception):
     """Base class for expected, user-facing failures with a clear cause."""
 
 
-class OllamaUnavailableError(AgentError):
+class ChatModelUnavailableError(AgentError):
     pass
 
 
@@ -23,4 +23,8 @@ class TranscriptionError(AgentError):
 
 
 class MatchExtractionError(AgentError):
+    pass
+
+
+class GoogleApiUnavailableError(AgentError):
     pass

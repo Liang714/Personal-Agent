@@ -1,16 +1,32 @@
 import base64
 import re
+import threading
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from email.mime.text import MIMEText
 from html import unescape
 
+from google.auth.exceptions import TransportError
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 from pydantic import BaseModel
 
 from agent import config
 from agent.core.tools import register_tool
+from agent.errors import GoogleApiUnavailableError
 from agent.google_auth import get_credentials
+
+
+def _execute(request):
+    """Run a Google API request with retries for transient errors, and turn any failure into a
+    clear, user-facing error instead of a raw traceback (e.g. DNS/network blips talking to
+    Google's servers)."""
+    try:
+        return request.execute(num_retries=3)
+    except (TransportError, HttpError, OSError) as exc:
+        raise GoogleApiUnavailableError(
+            f"Couldn't reach Gmail — check your network and try again. ({exc})"
+        ) from exc
 
 
 @dataclass
@@ -83,20 +99,19 @@ class GmailProvider(EmailProvider):
         self._service = build("gmail", "v1", credentials=get_credentials())
 
     def list_unread(self, max_results: int = 20) -> list[EmailMessage]:
-        resp = (
+        resp = _execute(
             self._service.users()
             .messages()
             .list(userId="me", labelIds=["INBOX", "UNREAD"], maxResults=max_results)
-            .execute()
         )
         messages = []
         for m in resp.get("messages", []):
-            full = self._service.users().messages().get(userId="me", id=m["id"], format="full").execute()
+            full = _execute(self._service.users().messages().get(userId="me", id=m["id"], format="full"))
             messages.append(_to_email_message(full))
         return messages
 
     def get_message(self, message_id: str) -> EmailMessage:
-        full = self._service.users().messages().get(userId="me", id=message_id, format="full").execute()
+        full = _execute(self._service.users().messages().get(userId="me", id=message_id, format="full"))
         return _to_email_message(full)
 
     def create_draft_reply(self, thread_id: str, to: str, subject: str, body: str) -> str:
@@ -104,24 +119,24 @@ class GmailProvider(EmailProvider):
         msg["To"] = to
         msg["Subject"] = subject if subject.lower().startswith("re:") else f"Re: {subject}"
         raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
-        draft = (
-            self._service.users()
-            .drafts()
-            .create(userId="me", body={"message": {"raw": raw, "threadId": thread_id}})
-            .execute()
+        draft = _execute(
+            self._service.users().drafts().create(userId="me", body={"message": {"raw": raw, "threadId": thread_id}})
         )
         return draft["id"]
 
 
-# TODO(week3): module-level singleton isn't thread-safe once served via FastAPI — revisit
-# with a lock or per-request provider.
+# FastAPI runs sync route handlers in a thread pool, so concurrent requests can genuinely race
+# on first construction — double-checked locking avoids building (and discarding) more than one.
 _provider: EmailProvider | None = None
+_provider_lock = threading.Lock()
 
 
 def _get_provider() -> EmailProvider:
     global _provider
     if _provider is None:
-        _provider = GmailProvider()
+        with _provider_lock:
+            if _provider is None:
+                _provider = GmailProvider()
     return _provider
 
 

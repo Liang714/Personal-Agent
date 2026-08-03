@@ -1,15 +1,30 @@
+import threading
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, time, timedelta
 
+from google.auth.exceptions import TransportError
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 from pydantic import BaseModel, ValidationError
 
 from agent import config
 from agent.core.tools import register_tool
-from agent.errors import MatchExtractionError
+from agent.errors import GoogleApiUnavailableError, MatchExtractionError
 from agent.google_auth import get_credentials
 from agent.llm_client import client
+
+
+def _execute(request):
+    """Run a Google API request with retries for transient errors, and turn any failure into a
+    clear, user-facing error instead of a raw traceback (e.g. DNS/network blips talking to
+    Google's servers)."""
+    try:
+        return request.execute(num_retries=3)
+    except (TransportError, HttpError, OSError) as exc:
+        raise GoogleApiUnavailableError(
+            f"Couldn't reach Google Calendar — check your network and try again. ({exc})"
+        ) from exc
 
 
 @dataclass
@@ -36,16 +51,14 @@ class GoogleCalendarProvider(CalendarProvider):
         self._service = build("calendar", "v3", credentials=get_credentials())
 
     def list_events(self, time_min: datetime, time_max: datetime) -> list[CalendarEvent]:
-        resp = (
-            self._service.events()
-            .list(
+        resp = _execute(
+            self._service.events().list(
                 calendarId="primary",
                 timeMin=time_min.isoformat(),
                 timeMax=time_max.isoformat(),
                 singleEvents=True,
                 orderBy="startTime",
             )
-            .execute()
         )
         events = []
         for e in resp.get("items", []):
@@ -61,37 +74,45 @@ class GoogleCalendarProvider(CalendarProvider):
             "start": {"dateTime": start.isoformat(), "timeZone": str(config.LOCAL_TZ)},
             "end": {"dateTime": end.isoformat(), "timeZone": str(config.LOCAL_TZ)},
         }
-        created = self._service.events().insert(calendarId="primary", body=event).execute()
+        created = _execute(self._service.events().insert(calendarId="primary", body=event))
         return created["id"]
 
     def delete_event(self, event_id: str) -> None:
-        self._service.events().delete(calendarId="primary", eventId=event_id).execute()
+        _execute(self._service.events().delete(calendarId="primary", eventId=event_id))
 
 
-# TODO(week3): module-level singleton isn't thread-safe once served via FastAPI — revisit
-# with a lock or per-request provider.
+# FastAPI runs sync route handlers in a thread pool, so concurrent requests can genuinely race
+# on first construction — double-checked locking avoids building (and discarding) more than one.
 _provider: CalendarProvider | None = None
+_provider_lock = threading.Lock()
 
 
 def _get_provider() -> CalendarProvider:
     global _provider
     if _provider is None:
-        _provider = GoogleCalendarProvider()
+        with _provider_lock:
+            if _provider is None:
+                _provider = GoogleCalendarProvider()
     return _provider
 
 
-def _today_range() -> tuple[datetime, datetime]:
-    now_local = datetime.now(config.LOCAL_TZ)
-    start_of_day = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+def _day_range(d: date) -> tuple[datetime, datetime]:
+    start_of_day = datetime.combine(d, time.min, tzinfo=config.LOCAL_TZ)
     return start_of_day, start_of_day + timedelta(days=1)
 
 
+def _resolve_date(date_str: str) -> date:
+    return date.fromisoformat(date_str) if date_str else datetime.now(config.LOCAL_TZ).date()
+
+
 @register_tool
-def list_today_events() -> str:
-    """List today's calendar events with start/end times."""
-    events = _get_provider().list_events(*_today_range())
+def list_events_on_date(date: str = "") -> str:
+    """List calendar events with start/end times for a given date ('YYYY-MM-DD'), or today if
+    date is omitted."""
+    d = _resolve_date(date)
+    events = _get_provider().list_events(*_day_range(d))
     if not events:
-        return "No events today."
+        return f"No events on {d.isoformat()}."
     return "\n".join(f"[{e.id}] {e.start} - {e.end}: {e.summary}" for e in events)
 
 
@@ -118,10 +139,10 @@ class _MatchedEventIds(BaseModel):
     explanation: str
 
 
-_EVENT_MATCH_PROMPT = """Here is today's real list of calendar events (id, start, end, summary). \
+_EVENT_MATCH_PROMPT = """Here is the real list of calendar events on {date} (id, start, end, summary). \
 A user asked to delete event(s) matching this description: "{description}"
 
-Today's events:
+Events on {date}:
 {listing}
 
 Return the id(s) of the event(s) that match the description. If it clearly refers to one event, \
@@ -130,12 +151,15 @@ all matching ids. If you are not confident any event matches, return an empty li
 or invent an id that isn't in the list above."""
 
 
-def _match_event_ids(description: str, events: list[CalendarEvent]) -> list[str]:
+def _match_event_ids(description: str, events: list[CalendarEvent], d: date) -> list[str]:
     listing = "\n".join(f"[{e.id}] {e.start} - {e.end}: {e.summary}" for e in events)
     response = client.chat(
         model=config.OLLAMA_MODEL,
         messages=[
-            {"role": "user", "content": _EVENT_MATCH_PROMPT.format(description=description, listing=listing)}
+            {
+                "role": "user",
+                "content": _EVENT_MATCH_PROMPT.format(description=description, listing=listing, date=d.isoformat()),
+            }
         ],
         format=_MatchedEventIds.model_json_schema(),
     )
@@ -153,22 +177,23 @@ def _match_event_ids(description: str, events: list[CalendarEvent]) -> list[str]
 
 
 @register_tool
-def delete_calendar_events(description: str) -> str:
-    """Delete one or more of today's calendar events matching a natural-language description
-    (e.g. "the dentist appointment", "both meetings this afternoon", "the 3pm one"). Do not
-    invent or guess an event id yourself — pass the user's own description and this tool will
-    look up today's real events and match against them itself. Only today's events can currently
-    be found/deleted this way. If nothing matches confidently, nothing is deleted."""
-    events = _get_provider().list_events(*_today_range())
+def delete_calendar_events(description: str, date: str = "") -> str:
+    """Delete one or more calendar events matching a natural-language description (e.g. "the
+    dentist appointment", "both meetings this afternoon", "the 3pm one"). Do not invent or guess
+    an event id yourself — pass the user's own description and this tool will look up the real
+    events on the given date and match against them itself. date is 'YYYY-MM-DD', or omit it for
+    today. If nothing matches confidently, nothing is deleted."""
+    d = _resolve_date(date)
+    events = _get_provider().list_events(*_day_range(d))
     if not events:
-        return "No events today to delete."
+        return f"No events on {d.isoformat()} to delete."
 
-    matched_ids = _match_event_ids(description, events)
+    matched_ids = _match_event_ids(description, events, d)
     if not matched_ids:
         listing = "\n".join(f"[{e.id}] {e.start} - {e.end}: {e.summary}" for e in events)
         return (
-            f'Couldn\'t confidently match "{description}" to any of today\'s events — nothing '
-            f"was deleted. Today's events:\n{listing}"
+            f'Couldn\'t confidently match "{description}" to any event on {d.isoformat()} — '
+            f"nothing was deleted. Events on {d.isoformat()}:\n{listing}"
         )
 
     deleted = [e for e in events if e.id in matched_ids]

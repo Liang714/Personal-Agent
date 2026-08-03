@@ -8,7 +8,13 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from agent import config
-from agent.errors import AgentError, NotAuthenticatedError, OllamaUnavailableError, ReauthRequiredError
+from agent.errors import (
+    AgentError,
+    GoogleApiUnavailableError,
+    NotAuthenticatedError,
+    ChatModelUnavailableError,
+    ReauthRequiredError,
+)
 from agent.logging_config import setup_logging
 from agent.storage.db import init_db
 
@@ -36,7 +42,7 @@ app.add_middleware(
 @app.exception_handler(AgentError)
 def handle_agent_error(_request, exc: AgentError):
     status = 500
-    if isinstance(exc, OllamaUnavailableError):
+    if isinstance(exc, (ChatModelUnavailableError, GoogleApiUnavailableError)):
         status = 503
     elif isinstance(exc, (NotAuthenticatedError, ReauthRequiredError)):
         status = 401
@@ -61,6 +67,19 @@ def chat(req: ChatRequest) -> ChatResponse:
     save_turn("user", req.message)
     save_turn("assistant", response)
     return ChatResponse(response=response)
+
+
+class ChatHistoryTurn(BaseModel):
+    role: str
+    content: str
+
+
+@app.get("/chat/history", response_model=list[ChatHistoryTurn])
+def chat_history(limit: int = 50) -> list[ChatHistoryTurn]:
+    """Past conversation turns, oldest-first, for restoring the chat view on page load."""
+    from agent.capabilities.companion import load_recent_history
+
+    return [ChatHistoryTurn(**turn) for turn in load_recent_history(limit=limit)]
 
 
 @app.post("/memo")
@@ -88,7 +107,7 @@ def inbox_scan(dry_run: bool = False) -> dict:
 def calendar_today() -> dict:
     from agent.core.agent_loop import ask
 
-    result = ask("What's on my calendar today? Use list_today_events. Flag any conflicts or back-to-back meetings.")
+    result = ask("What's on my calendar today? Use list_events_on_date. Flag any conflicts or back-to-back meetings.")
     return {"result": result}
 
 
@@ -100,11 +119,12 @@ class CalendarEventOut(BaseModel):
 
 
 @app.get("/calendar/events", response_model=list[CalendarEventOut])
-def list_calendar_events() -> list[CalendarEventOut]:
-    """Today's real events, straight from Google Calendar — no LLM involved."""
-    from agent.capabilities.calendar import _get_provider, _today_range
+def list_calendar_events(date: str = "") -> list[CalendarEventOut]:
+    """Real events for the given date ('YYYY-MM-DD', default today), straight from Google
+    Calendar — no LLM involved."""
+    from agent.capabilities.calendar import _day_range, _get_provider, _resolve_date
 
-    events = _get_provider().list_events(*_today_range())
+    events = _get_provider().list_events(*_day_range(_resolve_date(date)))
     return [CalendarEventOut(id=e.id, summary=e.summary, start=e.start, end=e.end) for e in events]
 
 

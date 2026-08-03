@@ -1,7 +1,10 @@
 import base64
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from agent.capabilities.inbox import GmailProvider, _extract_body, _strip_html
+from agent.errors import GoogleApiUnavailableError
 
 
 def test_strip_html_basic():
@@ -56,3 +59,20 @@ def test_create_draft_reply_never_sends(mock_build, mock_get_creds):
     mock_service.users.return_value.drafts.return_value.create.assert_called_once()
     mock_service.users.return_value.messages.return_value.send.assert_not_called()
     mock_service.users.return_value.drafts.return_value.send.assert_not_called()
+    mock_service.users.return_value.drafts.return_value.create.return_value.execute.assert_called_once_with(
+        num_retries=3
+    )
+
+
+@patch("agent.capabilities.inbox.get_credentials")
+@patch("agent.capabilities.inbox.build")
+def test_get_message_wraps_transient_network_error(mock_build, mock_get_creds):
+    mock_service = MagicMock()
+    mock_build.return_value = mock_service
+    mock_service.users.return_value.messages.return_value.get.return_value.execute.side_effect = OSError(
+        "[Errno 8] nodename nor servname provided, or not known"
+    )
+
+    provider = GmailProvider()
+    with pytest.raises(GoogleApiUnavailableError):
+        provider.get_message("msg123")

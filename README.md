@@ -2,7 +2,7 @@
 
 A personal multimodal AI agent: inbox/calendar management, a general companion, and a voice-memo-to-task/journal converter. Backend + CLI + API + a web UI (see [web/](web/) — works on phone browsers too, no native app needed).
 
-Runs entirely locally and for free — no paid API keys required. LLM reasoning is via [Ollama](https://ollama.com) running `qwen2.5:7b-instruct`; speech-to-text is via local `faster-whisper`.
+**Hybrid local/cloud LLM setup**: the main chat/tool-calling loop (`agent/core/agent_loop.py`) runs on the **Anthropic API** (Claude Haiku by default) — tool-calling reliability there matters enough to be worth a small real cost (needs billing set up at console.anthropic.com). Everything else — memo/inbox triage, calendar/task description-matching — runs on local [Ollama](https://ollama.com) (`qwen2.5:14b-instruct`), which stays free and already works well for those narrower, single-purpose calls. Speech-to-text is local `faster-whisper`.
 
 ## Setup
 
@@ -11,14 +11,15 @@ Runs entirely locally and for free — no paid API keys required. LLM reasoning 
    export PATH="$HOME/.local/bin:$PATH"   # if installed without Homebrew, as done here
    export OLLAMA_MODELS="$HOME/.local/ollama/models"
    ollama serve &
-   ollama pull qwen2.5:7b-instruct
+   ollama pull qwen2.5:14b-instruct
    ```
 2. Set up the Python environment:
    ```bash
    conda activate personal-agent
    pip install -e .          # add ".[dev]" instead to also get pytest
-   cp .env.example .env      # defaults work out of the box, no keys needed
+   cp .env.example .env
    ```
+   Then add an Anthropic API key to `.env` (`ANTHROPIC_API_KEY=`) — get one from console.anthropic.com (requires billing set up). Without it, chat will return a clear "couldn't reach the Anthropic API" error; every other feature (memo, inbox, calendar API endpoints) still works.
 3. For Gmail/Calendar: run `python -m agent.cli auth setup` once (opens a browser for Google consent). See the plan file for the one-time Google Cloud Console setup this depends on.
 
 ## Usage

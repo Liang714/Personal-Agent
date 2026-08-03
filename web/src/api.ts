@@ -32,12 +32,17 @@ export function chat(message: string): Promise<{ response: string }> {
   });
 }
 
-export function inboxScan(dryRun: boolean): Promise<{ result: string }> {
-  return request(`/inbox/scan?dry_run=${dryRun}`);
+export interface ChatHistoryTurn {
+  role: string;
+  content: string;
 }
 
-export function calendarToday(): Promise<{ result: string }> {
-  return request("/calendar/today");
+export function getChatHistory(limit = 50): Promise<ChatHistoryTurn[]> {
+  return request(`/chat/history?limit=${limit}`);
+}
+
+export function inboxScan(dryRun: boolean): Promise<{ result: string }> {
+  return request(`/inbox/scan?dry_run=${dryRun}`);
 }
 
 export interface CalendarEvent {
@@ -47,8 +52,8 @@ export interface CalendarEvent {
   end: string;
 }
 
-export function listCalendarEvents(): Promise<CalendarEvent[]> {
-  return request("/calendar/events");
+export function listCalendarEvents(date?: string): Promise<CalendarEvent[]> {
+  return request(`/calendar/events${date ? `?date=${date}` : ""}`);
 }
 
 export interface CreateEventInput {

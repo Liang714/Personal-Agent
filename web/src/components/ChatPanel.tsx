@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
-import { ApiError, chat } from "../api";
+import { useEffect, useRef, useState } from "react";
+import { ApiError, chat, getChatHistory } from "../api";
 
 interface Message {
   role: "user" | "assistant" | "error";
@@ -10,7 +10,23 @@ export default function ChatPanel() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    getChatHistory()
+      .then((turns) => {
+        setMessages(
+          turns
+            .filter((t) => t.role === "user" || t.role === "assistant")
+            .map((t) => ({ role: t.role as "user" | "assistant", content: t.content }))
+        );
+      })
+      .catch(() => {
+        // No history yet, or backend unreachable — start with an empty chat, same as before.
+      })
+      .finally(() => setLoadingHistory(false));
+  }, []);
 
   async function send() {
     const text = input.trim();
@@ -41,7 +57,8 @@ export default function ChatPanel() {
   return (
     <div className="panel chat-panel">
       <div className="chat-messages">
-        {messages.length === 0 && (
+        {loadingHistory && <p className="loading">Loading chat history…</p>}
+        {!loadingHistory && messages.length === 0 && (
           <p className="empty-hint">
             Ask about your inbox, calendar, tasks, or journal — or just say hello.
           </p>
