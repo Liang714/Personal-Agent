@@ -1,6 +1,6 @@
 import sqlite3
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from agent import config
 
@@ -55,7 +55,7 @@ def add_task(description: str, source: str) -> int:
     with get_conn() as conn:
         cur = conn.execute(
             "INSERT INTO tasks (description, source, created_at) VALUES (?, ?, ?)",
-            (description, source, datetime.now(timezone.utc).isoformat()),
+            (description, source, datetime.now(UTC).isoformat()),
         )
         return cur.lastrowid
 
@@ -64,7 +64,7 @@ def add_journal_index(entry_date: str, file_path: str, source: str) -> int:
     with get_conn() as conn:
         cur = conn.execute(
             "INSERT INTO journal_index (entry_date, file_path, source, created_at) VALUES (?, ?, ?, ?)",
-            (entry_date, file_path, source, datetime.now(timezone.utc).isoformat()),
+            (entry_date, file_path, source, datetime.now(UTC).isoformat()),
         )
         return cur.lastrowid
 
@@ -88,7 +88,7 @@ def add_conversation_turn(role: str, content: str) -> int:
     with get_conn() as conn:
         cur = conn.execute(
             "INSERT INTO conversations (role, content, created_at) VALUES (?, ?, ?)",
-            (role, content, datetime.now(timezone.utc).isoformat()),
+            (role, content, datetime.now(UTC).isoformat()),
         )
         return cur.lastrowid
 

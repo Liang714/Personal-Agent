@@ -3,12 +3,12 @@ import re
 from ollama._utils import convert_function_to_tool
 
 from agent import config
-from agent.errors import ChatModelUnavailableError
-from agent.llm_client import anthropic_client, build_system_prompt
-from agent.core.tools import TOOLS, TOOLS_BY_NAME
 
 # Import capability modules so their @register_tool functions populate TOOLS.
-from agent.capabilities import inbox, calendar, companion  # noqa: F401
+from agent.capabilities import calendar, companion, inbox  # noqa: F401
+from agent.core.tools import TOOLS, TOOLS_BY_NAME
+from agent.errors import ChatModelUnavailableError
+from agent.llm_client import anthropic_client, build_system_prompt
 
 
 def _to_anthropic_tool(func) -> dict:

@@ -1,4 +1,4 @@
-from typing import Callable
+from collections.abc import Callable
 
 TOOLS: list[Callable] = []
 TOOLS_BY_NAME: dict[str, Callable] = {}
