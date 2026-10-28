@@ -89,7 +89,7 @@ def memo(audio_path: Path):
 
     if result["tasks"]:
         click.echo("Tasks extracted:")
-        for task_id, task in zip(result["task_ids"], result["tasks"]):
+        for task_id, task in zip(result["task_ids"], result["tasks"], strict=True):
             click.echo(f"  [{task_id}] {task}")
     else:
         click.echo("Tasks extracted: none")
@@ -138,7 +138,12 @@ def draft(message_id: str):
 
 
 @inbox.command()
-@click.option("--interval", default=None, type=int, help="Minutes between scans (default: config.INBOX_SCAN_INTERVAL_MINUTES).")
+@click.option(
+    "--interval",
+    default=None,
+    type=int,
+    help="Minutes between scans (default: config.INBOX_SCAN_INTERVAL_MINUTES).",
+)
 def daemon(interval: int | None):
     """Run inbox scan on a repeating schedule until interrupted (Ctrl+C)."""
     from apscheduler.schedulers.blocking import BlockingScheduler
@@ -178,7 +183,9 @@ def calendar():
 def today():
     from agent.core.agent_loop import ask
 
-    click.echo(ask("What's on my calendar today? Use list_events_on_date. Flag any conflicts or back-to-back meetings."))
+    click.echo(
+        ask("What's on my calendar today? Use list_events_on_date. Flag any conflicts or back-to-back meetings.")
+    )
 
 
 @cli.command()

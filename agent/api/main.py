@@ -10,9 +10,9 @@ from pydantic import BaseModel
 from agent import config
 from agent.errors import (
     AgentError,
+    ChatModelUnavailableError,
     GoogleApiUnavailableError,
     NotAuthenticatedError,
-    ChatModelUnavailableError,
     ReauthRequiredError,
 )
 from agent.logging_config import setup_logging

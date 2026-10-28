@@ -43,7 +43,8 @@ Logs go to `data/agent.log` as well as stdout.
 
 ```bash
 pip install -e ".[dev]"
-python -m pytest tests/
+ruff check agent tests
+python -m pytest     # 46 tests; Anthropic, Ollama and Google calls are mocked, and each test gets its own database
 ```
 
 ## Web UI
